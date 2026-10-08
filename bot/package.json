@@ -1,0 +1,22 @@
+{
+  "name": "slip-tracker-bot",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node --test",
+    "start": "node src/index.js",
+    "db:init": "node scripts/init-db.js"
+  },
+  "dependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/tha": "^1.0.0",
+    "dotenv": "^18.0.6",
+    "fastify": "^5.12.5",
+    "grammy": "^1.46.0",
+    "jsqr": "^1.4.0",
+    "pg": "^8.23.1",
+    "sharp": "^0.35.5",
+    "tesseract.js": "^7.0.0"
+  },
+  "type": "module",
+  "private": true
+}

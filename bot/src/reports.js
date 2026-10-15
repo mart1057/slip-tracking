@@ -1,10 +1,9 @@
 // สรุปประจำวันและประจำสัปดาห์ที่ bot ส่งให้เอง
 import { bankName } from './banks.js';
-import { RULES } from './thresholds.js';
+import { limitLines } from './messages.js';
 import { addDays, bangkokNow, dayRange, formatBaht, formatThaiDay } from './time.js';
 
 const n = (v) => Number(v).toLocaleString('en-US');
-const millions = (v) => (v / 1_000_000).toFixed(2);
 const sum = (rows, key) => rows.reduce((total, r) => total + Number(r[key] || 0), 0);
 
 function bankLines(rows) {
@@ -19,11 +18,7 @@ async function thresholdLines(service, year) {
   for (const b of banks) {
     const mark = b.status === 'reached' ? '🚨' : b.status === 'near' ? '⚠️' : '•';
     const note = b.status === 'reached' ? ' ถึงเกณฑ์แล้ว' : b.status === 'near' ? ' ใกล้ถึงเกณฑ์' : '';
-    // แสดงเทียบเกณฑ์ 400 ครั้ง + 2 ล้านบาทเป็นหลัก เปลี่ยนเป็นเกณฑ์ 3,000 ครั้งเมื่อเกณฑ์นั้นใกล้กว่าและเกินครึ่งทางแล้ว
-    const detail = b.countOnly > b.combo && b.countOnly >= 0.5
-      ? `${n(b.count)}/${n(RULES.countOnly)} ครั้ง`
-      : `${n(b.count)}/${RULES.comboCount} ครั้ง, ${millions(b.amount)}/2 ล้านบาท`;
-    lines.push(`${mark} ${bankName(b.bank)} ${Math.min(Math.floor(b.progress * 100), 100)}% (${detail})${note}`);
+    lines.push(`${mark} ${bankName(b.bank)} ${limitLines(b)[0]}${note}`);
   }
   return lines;
 }

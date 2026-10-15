@@ -28,7 +28,7 @@ export default async function SlipDetail({ params }) {
       )}
       <div className="detail">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="slip-image" src={`/backend/api/slips/${s.id}/image`} alt={`รูปสลิป #${s.id}`} />
+        {s.image_path ? <img className="slip-image" src={`/backend/api/slips/${s.id}/image`} alt={`รูปสลิป #${s.id}`} /> : <p className="notice">รายการพิมพ์เอง ไม่มีรูปสลิป</p>}
         <div>
           <dl className="card facts">
             <dt>วันที่โอน</dt>

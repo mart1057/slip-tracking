@@ -19,6 +19,15 @@ export function parseAmountInput(text) {
   return n > 0 && n < 1e10 ? n : null;
 }
 
+/** รับชื่อธนาคารตามด้วยยอดเงิน โดยไม่เดาจากข้อความส่วนอื่น */
+export function parseTransferInput(text) {
+  const match = text.trim().match(/^(.+?)\s+(\d[\d,]*(?:\.\d{1,2})?)(?:\s*(?:บาท|฿))?$/);
+  if (!match) return null;
+  const bank = resolveBank(match[1]);
+  const amount = parseAmountInput(match[2]);
+  return bank && amount ? { bank, amount } : null;
+}
+
 export function createBot({ token, allowedUserIds, service, db, download, botInfo }) {
   const bot = new Bot(token, botInfo ? { botInfo } : undefined);
   const fetchFile = download || ((ctx, fileId) => downloadFromTelegram(ctx, fileId, token));
@@ -77,7 +86,7 @@ export function createBot({ token, allowedUserIds, service, db, download, botInf
   bot.command(['start', 'help'], (ctx) => ctx.reply(msg.HELP));
   bot.command('id', (ctx) => ctx.reply(`Telegram ID ของคุณคือ ${ctx.from.id}`));
 
-  bot.command('summary', async (ctx) => {
+  bot.command(['summary', 'sumary'], async (ctx) => {
     // /summary = ปีนี้, /summary 2569 = ดูปีที่ระบุ (รับทั้ง พ.ศ. และ ค.ศ.)
     const asked = Number((ctx.match || '').trim());
     const year = asked >= 2400 ? asked - 543 : asked >= 2000 ? asked : bangkokYear(new Date());
@@ -252,12 +261,23 @@ export function createBot({ token, allowedUserIds, service, db, download, botInf
     }
 
     const itemAsk = replied.match(/สลิป #(\d+) ลูกค้าซื้ออะไร/);
+    // การตอบคำถามสินค้าโดยตรงมีความสำคัญกว่าคำสั่งเพิ่มรายการ
+    const transfer = !itemAsk && !text.startsWith('/') && parseTransferInput(text);
+    if (transfer) {
+      const result = await service.recordTransfer({
+        ...transfer,
+        telegram: { userId: ctx.from.id, chatId: ctx.chat.id, messageId: ctx.message.message_id },
+      });
+      if (result.kind === 'duplicate') return ctx.reply(msg.duplicateMessage(result.slip));
+      return replyResult(ctx, result, 'บันทึกรายการจากข้อความแล้ว', { ask: true });
+    }
+
     let id = itemAsk ? Number(itemAsk[1]) : null;
     if (!id && !text.startsWith('/')) {
       // พิมพ์ตอบโดยไม่ได้กดตอบกลับ: ถือเป็นสินค้าของสลิปล่าสุดที่ยังไม่ระบุ (ภายใน 15 นาที)
       id = (await db.latestAwaitingItem(ctx.chat.id, new Date(Date.now() - 15 * 60_000)))?.id || null;
     }
-    if (!id) return ctx.reply('ส่งรูปสลิปเข้ามาได้เลย หรือพิมพ์ /help เพื่อดูคำสั่ง');
+    if (!id) return ctx.reply('ส่งรูปสลิป หรือพิมพ์ธนาคารที่รับเงินและยอด เช่น กสิกร 1500 หรือพิมพ์ /help');
 
     const result = await service.updateSlip(id, { item: text.slice(0, 300) });
     if (!result) return ctx.reply(`ไม่พบสลิป #${id}`);

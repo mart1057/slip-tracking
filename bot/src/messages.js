@@ -1,24 +1,31 @@
 // ข้อความตอบกลับของ bot
 import { bankName } from './banks.js';
-import { RULES } from './thresholds.js';
+import { evaluate } from './thresholds.js';
 import { formatBaht, formatThai } from './time.js';
 
 export const FULFILLMENT = { delivery: 'จัดส่ง', pickup: 'นัดรับ' };
 
 const DATE_NOTE = {
   sent: ' (อ่านวันที่ในสลิปไม่ได้ ใช้วันที่ส่งสลิป)',
+  manual: ' (ระบุเอง)',
   estimated: ' (อ่านเดือนในสลิปไม่ชัด เป็นค่าประมาณ ตรวจอีกครั้ง)',
 };
 
-const millions = (n) => (n / 1_000_000).toFixed(2);
 const count = (n) => n.toLocaleString('en-US');
+
+/** เปอร์เซ็นต์เกณฑ์รวมสะสมทั้งปี */
+export function limitLines(s) {
+  const { progress } = evaluate(s.count, s.amount);
+  const percent = (Math.round((progress * 100 + Number.EPSILON) * 100) / 100).toFixed(2);
+  return [`เกณฑ์รวม: ${percent}%`];
+}
 
 export function summaryBlock(s) {
   const lines = [
     `สรุป ${bankName(s.bank)} ปี ${s.year + 543}`,
     `รับเงินแล้ว: ${count(s.count)} ครั้ง`,
     `ยอดรวม: ${formatBaht(s.amount)} บาท`,
-    `เทียบเกณฑ์: ${count(s.count)}/${RULES.comboCount} ครั้ง, ${millions(s.amount)}/2 ล้านบาท`,
+    ...limitLines(s),
   ];
   if (s.openingCount || s.openingAmount) {
     lines.push(`(รวมยอดยกมาก่อนเริ่มระบบ ${count(s.openingCount)} ครั้ง ${formatBaht(s.openingAmount)} บาท)`);
@@ -26,10 +33,7 @@ export function summaryBlock(s) {
   if (s.status === 'reached') {
     lines.push('🚨 ถึงเกณฑ์ที่ธนาคารต้องส่งข้อมูลให้สรรพากรแล้ว');
   } else if (s.status === 'near') {
-    const which = s.countOnly > s.combo
-      ? `${count(s.count)}/${count(RULES.countOnly)} ครั้ง`
-      : `${Math.floor(s.combo * 100)}% ของเกณฑ์ 400 ครั้งและ 2 ล้านบาท`;
-    lines.push(`⚠️ ใกล้ถึงเกณฑ์ส่งข้อมูลสรรพากร (${which})`);
+    lines.push('⚠️ ใกล้ถึงเกณฑ์ส่งข้อมูลสรรพากร');
   }
   return lines.join('\n');
 }
@@ -94,6 +98,7 @@ export const orderDoneMessage = (slip) =>
 
 export const UNREADABLE = [
   '❌ อ่าน QR บนสลิปไม่ได้ จึงยังไม่บันทึก',
+  'หากสลิปไม่มี QR พิมพ์ธนาคารที่รับเงินและยอด เช่น กสิกร 1500 เพื่อบันทึกแทนได้',
   'ส่งใหม่โดยให้เห็นสลิปเต็มใบรวม QR ถ้ายังไม่ได้ ลองส่งแบบไฟล์ (ไม่บีบอัด)',
 ].join('\n');
 
@@ -101,8 +106,11 @@ export const HELP = [
   'ส่งรูปสลิปโอนเงินเข้ามาได้เลย ระบบจะบันทึกและสรุปยอดของธนาคารที่รับเงิน',
   'จากนั้นจะถามว่าลูกค้าซื้ออะไร และจัดส่งหรือนัดรับ (พิมพ์ชื่อสินค้าเป็นคำบรรยายใต้รูปตอนส่งสลิปก็ได้)',
   '',
+  'บันทึกโดยไม่ใช้รูป: พิมพ์ กสิกร 1500 หรือ SCB 1,500.50 บาท (ธนาคารที่รับเงิน)',
+  'ใช้วันเวลาที่ส่งข้อความ และนับเพิ่ม 1 รายการต่อข้อความใหม่',
+  '',
   'คำสั่ง',
-  '/summary  สรุปทุกธนาคารของปีนี้ (ดูปีก่อนได้ เช่น /summary 2569)',
+  '/summary หรือ /sumary  สรุปทุกธนาคารของปีนี้ พร้อม % เกณฑ์ (ดูปีก่อนได้ เช่น /summary 2569)',
   '/today  สรุปของวันนี้',
   '/week  สรุป 7 วันล่าสุด',
   '/settotal <ธนาคาร> <จำนวนครั้ง> <ยอดรวม>  ตั้งยอดรวมของปีนี้จนถึงตอนนี้ (รวมเงินเข้าก่อนเริ่มใช้ระบบ)',

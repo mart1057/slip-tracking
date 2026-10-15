@@ -2,7 +2,7 @@
 
 
 เริ่มการทำงานทั้งหมด 
-`bash ~/Desktop/Private/slip-tracker/setup-autostart.command`
+`bash ~/Desktop/Private/slip-tracking/setup-autostart.command`
 
 คำสั่ง `pm2` รันจากโฟลเดอร์ไหนก็ได้ ส่วนคำสั่งอื่นให้รันจากโฟลเดอร์ที่ระบุ
 ## ดูสถานะ

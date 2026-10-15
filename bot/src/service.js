@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
+import { bankByCode } from './banks.js';
 import { parseSlipText } from './slip/parse.js';
 import { evaluate } from './thresholds.js';
 import { bangkokYear } from './time.js';
@@ -99,6 +100,30 @@ export function createService({ db, imageDir, readSlipQr, ocrSlip, clock = () =>
     return { kind: 'saved', slip, summary: await summaryFor(slip), amountAlt: parsed.amountAlt };
   }
 
+  /** รายการพิมพ์เอง: ใช้เวลาได้รับข้อความ และกันการประมวลผลข้อความ Telegram เดิมซ้ำ */
+  async function recordTransfer({ bank, amount, telegram = {}, now = clock() }) {
+    if (!bankByCode(bank) || !Number.isFinite(amount) || amount < 0.01 || amount >= 1e10 ||
+        Math.abs(amount * 100 - Math.round(amount * 100)) > 0.0001) {
+      throw new Error('ธนาคารหรือยอดเงินไม่ถูกต้อง');
+    }
+    const transRef = telegram.chatId != null && telegram.messageId != null
+      ? `manual:${telegram.chatId}:${telegram.messageId}` : `manual:${crypto.randomUUID()}`;
+    const existing = await db.getSlipByRef(transRef);
+    if (existing) return { kind: 'duplicate', slip: existing };
+    const accounts = (await db.listAccounts()).filter((a) => a.bank_code === bank);
+    const slip = await db.insertSlip({
+      transRef, status: 'confirmed', transferredAt: now, dateEstimated: false, dateSource: 'manual',
+      amount, receiverBank: bank, receiverAccountId: accounts.length === 1 ? accounts[0].id : null,
+      senderBank: null, senderName: null, receiverName: null,
+      // ค่าว่างแสดงว่ารายการพิมพ์เองไม่มีรูป รองรับ schema เดิมโดยไม่ต้อง migrate
+      imagePath: '', fileHash: '', ocrText: null,
+      telegramUserId: telegram.userId ?? null, telegramChatId: telegram.chatId ?? null,
+      telegramMessageId: telegram.messageId ?? null,
+    });
+    if (!slip) return { kind: 'duplicate', slip: await db.getSlipByRef(transRef) };
+    return { kind: 'saved', slip, summary: await summaryFor(slip) };
+  }
+
   /** แก้ยอดเงิน/ธนาคาร/ชื่อ/วันที่/สินค้า/การรับของ ถ้ายอดและธนาคารครบจะนับรวมทันที */
   async function updateSlip(id, patch) {
     const slip = await db.updateSlip(id, patch);
@@ -112,7 +137,7 @@ export function createService({ db, imageDir, readSlipQr, ocrSlip, clock = () =>
 
   async function deleteSlip(id) {
     const slip = await db.deleteSlip(id);
-    if (slip) await fs.rm(path.join(imageDir, slip.image_path), { force: true });
+    if (slip?.image_path) await fs.rm(path.join(imageDir, slip.image_path), { force: true });
     return slip;
   }
 
@@ -142,5 +167,5 @@ export function createService({ db, imageDir, readSlipQr, ocrSlip, clock = () =>
     return { summary: await bankSummary(bank, year) };
   }
 
-  return { processSlip, updateSlip, deleteSlip, bankSummary, yearSummary, setCurrentTotal };
+  return { processSlip, recordTransfer, updateSlip, deleteSlip, bankSummary, yearSummary, setCurrentTotal };
 }
